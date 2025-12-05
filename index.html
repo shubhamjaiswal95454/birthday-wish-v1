@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Birthday Wish</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a2e; font-family: 'Arial', sans-serif; }
+        canvas { display: block; outline: none; }
+        
+        /* UI Overlay */
+        #ui-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .ui-element {
+            pointer-events: auto;
+            transition: opacity 0.5s, transform 0.5s;
+        }
+
+        h1 {
+            color: #fff;
+            text-shadow: 0 0 10px #ff00de, 0 0 20px #ff00de;
+            font-size: clamp(2rem, 5vw, 4rem);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        p.subtitle {
+            color: #e0e0e0;
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        button {
+            background: linear-gradient(135deg, #ff6b6b, #f06595);
+            border: none;
+            border-radius: 50px;
+            padding: 15px 40px;
+            color: white;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(240, 101, 149, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+            outline: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        button:active { transform: scale(0.95); }
+        button:hover { 
+            box-shadow: 0 6px 20px rgba(240, 101, 149, 0.6); 
+            transform: translateY(-2px);
+        }
+
+        /* The Letter Content */
+        #letter-content {
+            display: none;
+            background: linear-gradient(to bottom, #fffaf0, #fff5e6);
+            padding: 40px;
+            border-radius: 15px;
+            max-width: 85%;
+            width: 400px;
+            text-align: center;
+            color: #333;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            opacity: 0;
+            transform: translateY(20px) scale(0.9);
+            border: 2px solid #f06595;
+            position: relative;
+        }
+
+        #letter-content::before {
+            content: '';
+            position: absolute;
+            top: 10px; left: 10px; right: 10px; bottom: 10px;
+            border: 1px dashed #f06595;
+            border-radius: 10px;
+            pointer-events: none;
+        }
+
+        #letter-content h2 {
+            color: #d63384;
+            margin-top: 0;
+            font-family: 'Brush Script MT', cursive;
+            font-size: 2.5rem;
+        }
+
+        #letter-content p { 
+            font-size: 1.1rem; 
+            line-height: 1.6; 
+            color: #555;
+        }
+
+        .hidden { 
+            opacity: 0 !important; 
+            pointer-events: none !important; 
+        }
+        
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <!-- Step 1: Welcome -->
+        <div id="step-welcome" class="ui-element">
+            <h1 id="welcome-text">Happy Birthday!</h1>
+            <p id="welcome-sub" class="subtitle">I have a 3D surprise for you.</p>
+            <button onclick="startExperience()">Start Celebration</button>
+        </div>
+
+        <!-- Step 2: Light Candle -->
+        <div id="step-light" class="ui-element hidden">
+            <button onclick="lightCandle()">Light the Candle</button>
+        </div>
+
+        <!-- Step 3: Cut Cake -->
+        <div id="step-cut" class="ui-element hidden">
+            <button onclick="cutCake()">Cut the Cake</button>
+        </div>
+
+        <!-- Step 4: Open Letter -->
+        <div id="step-open" class="ui-element hidden">
+            <button onclick="openLetter()">Open Letter</button>
+        </div>
+
+        <!-- Step 5: The Message -->
+        <div id="letter-content" class="ui-element">
+            <h2>To a Special Person</h2>
+            <p>
+                Wishing you a day filled with laughter, love, and all the things that make you smile. 
+                May this year bring you endless joy and success!
+            </p>
+            <p style="font-weight: bold; margin-top: 20px;">Happy Birthday! ❤️</p>
+        </div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+
+    <script>
+        // --- 1. SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+        scene.fog = new THREE.FogExp2(0x1a1a2e, 0.02);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 12);
+        camera.lookAt(0, 2, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        // Floor
+        const floorGeometry = new THREE.PlaneGeometry(100, 100);
+        const floorMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x111122, 
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = -2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 2. OBJECTS ---
+        
+        // Group for Cake
+        const cakeGroup = new THREE.Group();
+        scene.add(cakeGroup);
+        cakeGroup.visible = false;
+
+        // --- HEART CAKE GENERATION ---
+        
+        // Function to create heart shape
+        function createHeartShape() {
+            const shape = new THREE.Shape();
+            const x = 0, y = 0;
+            shape.moveTo(x + 2.5, y + 2.5);
+            shape.bezierCurveTo(x + 2.5, y + 2.5, x + 2.0, y, x, y);
+            shape.bezierCurveTo(x - 3.0, y, x - 3.0, y + 3.5, x - 3.0, y + 3.5);
+            shape.bezierCurveTo(x - 3.0, y + 5.5, x - 1.0, y + 7.7, x + 2.5, y + 9.5);
+            shape.bezierCurveTo(x + 6.0, y + 7.7, x + 8.0, y + 5.5, x + 8.0, y + 3.5);
+            shape.bezierCurveTo(x + 8.0, y + 3.5, x + 8.0, y, x + 5.0, y);
+            shape.bezierCurveTo(x + 3.5, y, x + 2.5, y + 2.5, x + 2.5, y + 2.5);
+            return shape;
+        }
+
+        const heartShape = createHeartShape();
+        
+        // --- TIER 1 (Bottom) ---
+        const tier1Settings = { depth: 2, bevelEnabled: true, bevelSegments: 2, steps: 2, bevelSize: 0.1, bevelThickness: 0.1 };
+        const tier1Geo = new THREE.ExtrudeGeometry(heartShape, tier1Settings);
+        tier1Geo.center(); 
+        
+        // Red Velvet Material
+        const redCakeMat = new THREE.MeshStandardMaterial({ color: 0xbd1e3b, roughness: 0.6 }); 
+        const whiteFrostingMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.1 });
+
+        const tier1 = new THREE.Mesh(tier1Geo, redCakeMat);
+        tier1.rotation.x = Math.PI / 2; 
+        tier1.rotation.z = Math.PI; 
+        tier1.receiveShadow = true;
+        tier1.castShadow = true;
+        cakeGroup.add(tier1);
+
+        // Tier 1 Frosting
+        const tier1FrostSettings = { depth: 0.3, bevelEnabled: true, bevelSegments: 3, steps: 2, bevelSize: 0.15, bevelThickness: 0.15 };
+        const tier1FrostGeo = new THREE.ExtrudeGeometry(heartShape, tier1FrostSettings);
+        tier1FrostGeo.center();
+        const tier1Frost = new THREE.Mesh(tier1FrostGeo, whiteFrostingMat);
+        tier1Frost.rotation.x = Math.PI / 2;
+        tier1Frost.rotation.z = Math.PI;
+        tier1Frost.position.y = 1.05;
+        tier1Frost.scale.set(1.02, 1.02, 1);
+        tier1Frost.castShadow = true;
+        cakeGroup.add(tier1Frost);
+
+        // --- TIER 2 (Top) ---
+        const tier2Settings = { depth: 1.5, bevelEnabled: true, bevelSegments: 2, steps: 2, bevelSize: 0.1, bevelThickness: 0.1 };
+        const tier2Geo = new THREE.ExtrudeGeometry(heartShape, tier2Settings);
+        tier2Geo.center();
+        
+        const tier2 = new THREE.Mesh(tier2Geo, redCakeMat);
+        tier2.rotation.x = Math.PI / 2;
+        tier2.rotation.z = Math.PI;
+        tier2.scale.set(0.6, 0.6, 0.6); // Smaller
+        tier2.position.y = 1.8; // Sit on top of Tier 1
+        tier2.castShadow = true;
+        cakeGroup.add(tier2);
+
+        // Tier 2 Frosting
+        const tier2Frost = new THREE.Mesh(tier1FrostGeo, whiteFrostingMat);
+        tier2Frost.rotation.x = Math.PI / 2;
+        tier2Frost.rotation.z = Math.PI;
+        tier2Frost.scale.set(0.62, 0.62, 0.6);
+        tier2Frost.position.y = 2.6; // Top of Tier 2
+        tier2Frost.castShadow = true;
+        cakeGroup.add(tier2Frost);
+
+
+        // --- DECORATIONS (Gems) ---
+        const gemColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xffa500, 0x9c27b0, 0x00bcd4];
+        const gemGeo = new THREE.SphereGeometry(0.12, 16, 16);
+        
+        function addGemsToLayer(yPos, radiusScale, count) {
+            for(let i=0; i<count; i++) {
+                const color = gemColors[Math.floor(Math.random() * gemColors.length)];
+                const gemMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.1, metalness: 0.3 });
+                const gem = new THREE.Mesh(gemGeo, gemMat);
+                
+                const angle = Math.random() * Math.PI * 2;
+                
+                let r = (1.5 + Math.random() * 0.5) * radiusScale;
+                
+                let gx = Math.cos(angle) * r;
+                let gz = Math.sin(angle) * r;
+                
+                // Shift to align center
+                gz -= 0.5 * radiusScale;
+
+                gem.position.set(gx, yPos, gz);
+                cakeGroup.add(gem);
+            }
+        }
+
+        addGemsToLayer(1.2, 1.0, 20); // Tier 1 gems
+        addGemsToLayer(2.75, 0.6, 15); // Tier 2 gems
+
+
+        // --- HAPPY BIRTHDAY TAG (TOPPER) ---
+        function createTag() {
+            // 1. Create Canvas Texture
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            // Draw Background (White rounded rect)
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.roundRect(10, 10, 492, 108, 30);
+            ctx.fill();
+            
+            // Border
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#bd1e3b'; // Match cake color
+            ctx.stroke();
+
+            // Text
+            ctx.font = 'bold 60px Arial';
+            ctx.fillStyle = '#bd1e3b';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Happy Birthday!', 256, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            
+            // 2. Create Mesh
+            const planeGeo = new THREE.PlaneGeometry(2.5, 0.625);
+            const planeMat = new THREE.MeshStandardMaterial({ 
+                map: texture, 
+                transparent: true,
+                side: THREE.DoubleSide
+            });
+            const tagMesh = new THREE.Mesh(planeGeo, planeMat);
+            
+            // 3. Add Sticks (Holders)
+            const stickGeo = new THREE.CylinderGeometry(0.03, 0.03, 1, 8);
+            const stickMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            
+            const stickLeft = new THREE.Mesh(stickGeo, stickMat);
+            stickLeft.position.set(-1, -0.5, 0);
+            tagMesh.add(stickLeft);
+
+            const stickRight = new THREE.Mesh(stickGeo, stickMat);
+            stickRight.position.set(1, -0.5, 0);
+            tagMesh.add(stickRight);
+
+            return tagMesh;
+        }
+
+        const topper = createTag();
+        topper.position.set(0, 3.8, 0.5); // Top of Tier 2, front
+        // Slight tilt back for readability
+        topper.rotation.x = -0.1; 
+        cakeGroup.add(topper);
+
+
+        // Candle (Centered on Top Tier, shifted back slightly)
+        const candleGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.5, 16);
+        const candleMat = new THREE.MeshStandardMaterial({ color: 0xffffff }); 
+        const candle = new THREE.Mesh(candleGeo, candleMat);
+        candle.position.set(0, 3.4, -0.3); // Moved up to Tier 2
+        candle.castShadow = true;
+        cakeGroup.add(candle);
+
+        // Stripes on Candle
+        const stripeGeo = new THREE.TorusGeometry(0.13, 0.02, 8, 16);
+        const stripeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        for(let i=0; i<3; i++) {
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.rotation.x = Math.PI/2;
+            stripe.position.y = 0.2 + (i*0.4) - 0.75; 
+            candle.add(stripe);
+        }
+
+        // Flame
+        const flameGeo = new THREE.SphereGeometry(0.2, 16, 16);
+        const flameMat = new THREE.MeshStandardMaterial({ 
+            color: 0x333333, 
+            emissive: 0x000000 
+        });
+        const flame = new THREE.Mesh(flameGeo, flameMat);
+        flame.position.y = 0.8;
+        candle.add(flame);
+
+        // Flame Light
+        const flameLight = new THREE.PointLight(0xffaa00, 0, 8);
+        flameLight.castShadow = true;
+        flame.add(flameLight);
+
+        // --- ENVELOPE OBJECTS (Same as before) ---
+        const letterGroup = new THREE.Group();
+        scene.add(letterGroup);
+        letterGroup.visible = false;
+        
+        const envW = 4.5, envH = 3, envD = 0.1;
+        const envGeo = new THREE.BoxGeometry(envW, envH, envD);
+        const envMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.6 });
+        const envelope = new THREE.Mesh(envGeo, envMat);
+        envelope.castShadow = true;
+        letterGroup.add(envelope);
+
+        const flapShape = new THREE.Shape();
+        flapShape.moveTo(-2.25, 0); 
+        flapShape.lineTo(2.25, 0);  
+        flapShape.lineTo(0, -1.5);  
+        const flapGeo = new THREE.ExtrudeGeometry(flapShape, { depth: 0.05, bevelEnabled: false });
+        const flapMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, roughness: 0.6 });
+        const flap = new THREE.Mesh(flapGeo, flapMat);
+        flap.position.set(0, 1.5, 0.05); 
+        letterGroup.add(flap);
+
+        // Reuse heart shape for seal
+        const sealShape = createHeartShape();
+        const sealGeo = new THREE.ExtrudeGeometry(sealShape, { depth: 0.1, bevelEnabled: false });
+        sealGeo.center();
+        const sealMat = new THREE.MeshStandardMaterial({ color: 0xd63384, roughness: 0.4 });
+        const seal = new THREE.Mesh(sealGeo, sealMat);
+        seal.position.set(0, 0, 0.15); 
+        seal.scale.set(0.15, 0.15, 0.15); 
+        seal.rotation.z = Math.PI; 
+        letterGroup.add(seal);
+
+
+        // --- FIREWORKS SYSTEM ---
+        const particles = [];
+        
+        function createFirework(x, y, z) {
+            const particleCount = 100;
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const velocities = [];
+            const colors = [];
+            const color = new THREE.Color();
+            color.setHSL(Math.random(), 1, 0.6);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions.push(x, y, z);
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(Math.random() * 2 - 1);
+                const speed = Math.random() * 0.2 + 0.05;
+                velocities.push(
+                    speed * Math.sin(phi) * Math.cos(theta),
+                    speed * Math.sin(phi) * Math.sin(theta),
+                    speed * Math.cos(phi)
+                );
+                colors.push(color.r, color.g, color.b);
+            }
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            const material = new THREE.PointsMaterial({ size: 0.3, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false });
+            const points = new THREE.Points(geometry, material);
+            scene.add(points);
+            particles.push({ mesh: points, velocities: velocities, life: 1.0 });
+        }
+
+        function updateFireworks() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                const positions = p.mesh.geometry.attributes.position.array;
+                p.life -= 0.015;
+                for (let j = 0; j < p.velocities.length / 3; j++) {
+                    positions[j * 3] += p.velocities[j * 3]; 
+                    positions[j * 3 + 1] += p.velocities[j * 3 + 1]; 
+                    positions[j * 3 + 2] += p.velocities[j * 3 + 2]; 
+                    p.velocities[j * 3 + 1] -= 0.005; 
+                }
+                p.mesh.geometry.attributes.position.needsUpdate = true;
+                p.mesh.material.opacity = p.life;
+                p.mesh.material.transparent = true;
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // --- ANIMATIONS ---
+        
+        // Welcome Text Animation (GSAP)
+        const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
+        tl.from("#welcome-text", { y: -50, opacity: 0, duration: 1 })
+          .from("#welcome-sub", { y: 20, opacity: 0, duration: 0.8 }, "-=0.5")
+          .to("#welcome-text", { scale: 1.1, textShadow: "0 0 30px #ff00de", duration: 0.8, yoyo: true, repeat: -1, ease: "sine.inOut" });
+
+        let fireworksEnabled = false;
+
+        function startExperience() {
+            document.getElementById('step-welcome').classList.add('hidden');
+            cakeGroup.visible = true;
+            
+            cakeGroup.scale.set(0,0,0);
+            gsap.to(cakeGroup.scale, { x:1, y:1, z:1, duration: 1.5, ease: "elastic.out(1, 0.5)" });
+            gsap.to(cakeGroup.rotation, { y: Math.PI * 4, duration: 2, ease: "power2.out" });
+
+            setTimeout(() => {
+                const btn = document.getElementById('step-light');
+                btn.classList.remove('hidden');
+            }, 1800);
+        }
+
+        function lightCandle() {
+            document.getElementById('step-light').classList.add('hidden');
+            
+            gsap.to(flameMat.color, { r:1, g:0.5, b:0, duration: 0.5 });
+            gsap.to(flameMat.emissive, { r:1, g:0.6, b:0, duration: 0.5 });
+            gsap.to(flameLight, { intensity: 1.2, duration: 0.5 });
+
+            const flicker = () => {
+                if(!cakeGroup.visible) return;
+                gsap.to(flame.scale, { 
+                    x: 0.8 + Math.random()*0.4, 
+                    y: 0.8 + Math.random()*0.4, 
+                    z: 0.8 + Math.random()*0.4, 
+                    duration: 0.1, 
+                    onComplete: flicker 
+                });
+                flameLight.intensity = 1 + Math.random() * 0.5;
+            };
+            flicker();
+
+            setTimeout(() => {
+                document.getElementById('step-cut').classList.remove('hidden');
+            }, 1500);
+        }
+
+        function cutCake() {
+            document.getElementById('step-cut').classList.add('hidden');
+            
+            gsap.to(cakeGroup.scale, { 
+                x: 0, y: 0, z: 0, 
+                duration: 0.8, 
+                ease: "back.in(1.7)"
+            });
+            
+            setTimeout(() => {
+                cakeGroup.visible = false;
+                showEnvelope();
+            }, 800);
+        }
+
+        function showEnvelope() {
+            letterGroup.visible = true;
+            letterGroup.scale.set(0,0,0);
+            letterGroup.rotation.y = 0;
+            
+            gsap.to(letterGroup.scale, { x:1, y:1, z:1, duration: 1.5, ease: "elastic.out(1, 0.6)" });
+            
+            setTimeout(() => {
+                document.getElementById('step-open').classList.remove('hidden');
+            }, 1500);
+        }
+
+        function openLetter() {
+            document.getElementById('step-open').classList.add('hidden');
+            fireworksEnabled = true;
+
+            gsap.to(seal.scale, { x:0, y:0, z:0, duration: 0.3, ease: "back.in" });
+            gsap.to(flap.rotation, { x: -Math.PI * 0.7, duration: 1, ease: "power2.inOut", delay: 0.2 });
+            gsap.to(camera.position, { z: 9, y: 2, duration: 1.5, delay: 0.5 });
+            
+            const letterDiv = document.getElementById('letter-content');
+            letterDiv.style.display = 'block';
+            
+            gsap.to(letterDiv, {
+                opacity: 1,
+                y: 0,
+                scale: 1,
+                duration: 1,
+                delay: 0.8,
+                ease: "back.out(1.2)"
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (cakeGroup.visible) {
+                cakeGroup.rotation.y += 0.005;
+            }
+            if (letterGroup.visible) {
+                letterGroup.position.y = Math.sin(Date.now() * 0.002) * 0.1;
+                letterGroup.rotation.z = Math.sin(Date.now() * 0.001) * 0.05;
+            }
+
+            if (fireworksEnabled && Math.random() < 0.08) {
+                createFirework(
+                    (Math.random() - 0.5) * 15,
+                    Math.random() * 8 + 3,
+                    (Math.random() - 0.5) * 10 - 5
+                );
+            }
+            updateFireworks();
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>
